@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
+from tqdm import tqdm
 
 from assignment import Assignment
 
@@ -58,16 +59,17 @@ def cross_validation(data):
 
 assignments = dict()
 
-for model_name in attribution:
+print("Initializing assignments :")
+
+for model_name in tqdm(attribution):
     for ass_name in attribution[model_name]:
         new_ass = initialize_assignment(ass_name, model_name=model_name, data=df[df.ASS_ASSIGNMENT == ass_name])
         new_ass.model.train(verbose=verb)
         assignments[ass_name] = new_ass
 
-print("Assignments calculated.")
+print("Calculating predictions :")
 
-
-for i, row in dfsub[:5].iterrows():
+for i, row in tqdm(dfsub.iterrows()):
     ass_name = row['ASS_ASSIGNMENT']
     prediction = assignments[ass_name].model.predict(submission=row, verbose=verb)
     dfsub.set_value(i, 'prediction', prediction)
