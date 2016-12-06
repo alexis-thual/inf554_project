@@ -35,8 +35,9 @@ class Model:
 
         return data
 
-    def set_data(self, data, verbose=False):
-        self.data = self.preprocess(data)
-
-        if verbose:
-            print("Data added")
+    def set_data(self, data, ass_name, verbose=False):
+        # self.data = self.preprocess(data)
+        # self.data.to_csv(r'new_data/' + ass_name + '.txt', index=None, sep='\t')
+        self.data = data
+        # if verbose:
+        #     print("Data added")

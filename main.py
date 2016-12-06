@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
 from tqdm import tqdm
+from slugify import slugify
 
 from assignment import Assignment
 
@@ -11,7 +12,7 @@ from assignment import Assignment
 # Otherwise, the following variables won't be defined.
 
 # Debug mode, prints intermediate values.
-verb = True
+verb = False
 
 attribution = {
     'MaxModel': [
@@ -19,7 +20,7 @@ attribution = {
         'Manager', 'Gestion Clients', 'Mécanicien',
         'Crises', 'Gestion Renault'
     ],
-    'KMeanModel': [
+    'Arima': [
         'Domicile', 'Gestion - Accueil Telephonique', 'Médical',
         'RENAULT', 'SAP', 'Services', 'Tech. Axa', 'Tech. Inter',
         'Téléphonie', 'Tech. Total', 'CAT', 'Gestion Assurances',
@@ -32,39 +33,23 @@ def initialize_assignment(ass_name, model_name='MaxModel', params=None, data=Non
     return Assignment(ass_name, model_name=model_name, params=params,
                       data=data, verbose=verb)
 
-def cost_function(test, assignment):
-    s = 0
-    for i, row in test.iterrows():
-        tmp = -0.1 * (assignments.model.predict(row, verbose=verb) - row.CSPL_RECEIVED_CALLS)
-        s += np.exp(tmp) - tmp - 1
-    return s
-
-def cross_validation(data):
-    params_list = [1]
-    for p in params_list:
-        assignments = dict()
-
-        for model_name in attribution:
-            for ass_name in attribution[model_name]:
-                X_train, X_test = train_test_split(
-                    df[df.ASS_ASSIGNMENT == ass_name], test_size=0.1, random_state=None)
-                new_ass = initialize_assignment(ass_name, model_name, p, X_train)
-                new_ass.model.train(verbose=verb)
-
-                total_error = cost_function(X_test, new_ass)
-
-                assignments[ass_name] = new_ass
-
-        print("Assignments calculated.")
-
 assignments = dict()
 
 print("Initializing assignments :")
 
-for model_name in tqdm(attribution):
-    for ass_name in attribution[model_name]:
-        new_ass = initialize_assignment(ass_name, model_name=model_name, data=df[df.ASS_ASSIGNMENT == ass_name])
+for model_name in attribution:
+    for ass_name in tqdm(attribution[model_name]):
+        data_ass = pd.read_csv(
+            'new_data/' + slugify(ass_name) + '.txt',
+            sep='\t',
+            usecols=['DATE','CSPL_RECEIVED_CALLS'],
+            parse_dates=[0]
+        )
+        data_ass[['CSPL_RECEIVED_CALLS']] = data_ass[['CSPL_RECEIVED_CALLS']].apply(pd.to_numeric)
+
+        new_ass = initialize_assignment(ass_name, model_name=model_name, data=data_ass)
         new_ass.model.train(verbose=verb)
+
         assignments[ass_name] = new_ass
 
 print("Calculating predictions :")

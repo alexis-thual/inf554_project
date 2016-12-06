@@ -1,4 +1,6 @@
 import importlib
+import unicodedata
+from slugify import slugify
 
 class Assignment:
     def __init__(self, assignment_name, model_name='MaxModel', params=None, data=None, verbose=False):
@@ -9,7 +11,7 @@ class Assignment:
         module = importlib.import_module("Models." + model_name)
         self.model = getattr(module, model_name)()
         self.model_name = model_name
-        self.model.set_data(data, verbose=verbose)
+        self.model.set_data(data, slugify(self.assignment_name), verbose=verbose)
         self.model.set_params(params=params, verbose=verbose)
 
     def __str__(self):
