@@ -1,4 +1,7 @@
 submission.txt
+domplete_data.txt
+complete_data.txt
+new_data/*
 train.csv
 __pycache__/*
 Models/__pycache__/*

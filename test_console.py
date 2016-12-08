@@ -1,209 +1,150 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.cross_validation import train_test_split
+import datetime
+
 from tqdm import tqdm
-from slugify import slugify
-from statsmodels.tsa.stattools import adfuller
-from statsmodels.tsa.filters.filtertools import convolution_filter
-from pandas.core.nanops import nanmean as pd_nanmean
+from functools import reduce
+from statsmodels.tsa.seasonal import seasonal_decompose
 
-def seasonal_mean(x, freq):
-    return np.array([pd_nanmean(x[i::freq]) for i in range(freq)])
 
-def seasonal_decompose(x, freq=None):
-    freq_trend = 48 * 7 * 3
-    freq_week = 48 * 7 * 3
-    freq_day = 48 * 7 * 3
-
-    if not freq == None:
-        freq_trend = freq
-
-    trend = 0
-    seasonal_week = 0
-    seasonal_day = 0
-    resid = 0
-
-    x = np.asanyarray(x).squeeze()
-    nobs = len(x)
-
-    if not np.all(np.isfinite(x)):
-        raise ValueError("This function does not handle missing values")
-
-    filt = np.repeat(1./freq_trend, freq_trend)
-    trend = convolution_filter(x, filt)
-
-    # detrended = x - trend
-    #
-    # period_averages_week = seasonal_mean(detrended, freq_week)
-    # period_averages_week -= np.mean(period_averages_week)
-    #
-    # seasonal_week = np.tile(period_averages_week, nobs // freq_week + 1)[:nobs]
-    #
-    # resid_week = detrended - seasonal_week
-    #
-    # period_averages_day = seasonal_mean(resid_week, freq_day)
-    # period_averages_day -= np.mean(period_averages_day)
-    #
-    # seasonal_day = np.tile(period_averages_day, nobs // freq_day + 1)[:nobs]
-    #
-    # resid = resid_week - seasonal_day
-    #
-    return (resid, seasonal_day, seasonal_week, trend)
-
-data_ass = pd.read_csv('new_data/domicile.txt',sep='\t',parse_dates=[0],index_col=0)
+data_ass = pd.read_csv('new_data/japon.txt',sep='\t',parse_dates=[0],index_col=0)
 data_ass.dropna(inplace=True)
 # data_ass.interpolate(inplace=True)
 
-freq_trend = 48 * 7 * 10
-filt = np.repeat(1./freq_trend, freq_trend)
-trend = convolution_filter(days[0], filt)
-plt.subplot(211)
-plt.plot(days[0], label="Mondays")
-plt.legend(loc='best')
-plt.subplot(212)
-plt.plot(trend, label="Trend")
-plt.legend(loc='best')
-plt.show()
+# Répartition des data par jour de la semaine
+days = []
+for d in range(7):
+    sub_data = data_ass[data_ass.index.weekday == d]
+    days.append(sub_data)
 
-hours = dict()
-for i in range(48):
-    sub_array = days[0].between_time(start_time=str(datetime.timedelta(minutes=i*30)), end_time=str(datetime.timedelta(minutes=((i+1)%48)*30)))
-    hours[i] = (sub_array.mean()).CSPL_RECEIVED_CALLS
-print(*hours)
-
-total_hours = []
-for y in range(3*7):
-    data = data_ass[(data_ass.index.year == (2011+(y%3))) & (data_ass.index.weekday == (y//3))]
+# Moyenne par heure et par jour de la semaine
+means = []
+standard_deviations = []
+max_mean = []
+max_std = []
+for y in range(7):
+    data = data_ass[data_ass.index.weekday == y]
     hours_mean = []
     hours_std = []
     for i in range(48):
         sub_array = data.between_time(start_time=str(datetime.timedelta(minutes=i*30)), end_time=str(datetime.timedelta(minutes=((i+1)%48)*30)))
         hours_mean.append((sub_array.mean()).CSPL_RECEIVED_CALLS)
         hours_std.append((sub_array.std()).CSPL_RECEIVED_CALLS)
-    total_hours.append((hours_mean, hours_std))
 
-x = range(48)
-nd = 7
-for k in range(nd):
-    plt.subplot(int("1" + str(nd) + str(k+1)))
-    for y in range(3):
-        plt.plot(total_hours[k*3 + y][0], label=k)
-        plt.errorbar(x, total_hours[k*3 + y][0], total_hours[k*3 + y][1])
-plt.show()
+    means.append(hours_mean)
+    standard_deviations.append(hours_std)
 
-ts = data_ass['CSPL_RECEIVED_CALLS']
-ts = np.log(ts + 0.1)
-plt.subplot(511)
-plt.plot(ts, label='Original')
-plt.legend(loc='best')
+    max_mean.append(max(hours_mean))
+    max_std.append(max(hours_std))
 
-c = 1
-for i in range(5,9):
-    decomposition = seasonal_decompose(ts, freq=48*7*i)
-    resid = decomposition[0]
-    seasonal_day = decomposition[1]
-    seasonal_week = decomposition[2]
-    trend = decomposition[3]
-    plt.subplot(511 + c)
-    plt.plot(trend, label='freq:'+str(48*7*i))
-    plt.legend(loc='best')
-    c += 1
-
-# plt.subplot(512)
-# plt.plot(resid, label='resid')
-# plt.legend(loc='best')
-# plt.subplot(513)
-# plt.plot(seasonal_day,label='seasonal_day')
-# plt.legend(loc='best')
-# plt.subplot(514)
-# plt.plot(seasonal_week, label='seasonal_week')
-# plt.legend(loc='best')
-# plt.subplot(515)
-# plt.plot(trend, label='trend')
-# plt.legend(loc='best')
-
-plt.tight_layout()
-plt.show()
-
-#
-# w = 48*7
-# def test_stationarity(timeseries, w):
-#     rolmean = pd.rolling_mean(timeseries, window=w)
-#     rolstd = pd.rolling_std(timeseries, window=w)
-#     orig = plt.plot(timeseries, color='blue',label='Original')
-#     mean = plt.plot(rolmean, color='red', label='Rolling Mean')
-#     std = plt.plot(rolstd, color='black', label = 'Rolling Std')
-#     plt.legend(loc='best')
-#     plt.title('Rolling Mean & Standard Deviation')
-#     plt.show(block=False)
-#     print('Results of Dickey-Fuller Test:')
-#     dftest = adfuller(timeseries, autolag='AIC')
-#     dfoutput = pd.Series(dftest[0:4], index=['Test Statistic','p-value','#Lags Used','Number of Observations Used'])
-#     for key,value in dftest[4].items():
-#         dfoutput['Critical Value (%s)'%key] = value
-#     print(dfoutput)
-# data_ass = pd.read_csv('new_data/domicile.txt',sep='\t',parse_dates=[0],index_col=0)
-# data_ass.dropna(inplace=True)
-# data_ass.fillna(method='pad', inplace=True)
-# ts = data_ass['CSPL_RECEIVED_CALLS']
-# ts_log = np.log(ts+0.1)
-# decomposition = seasonal_decompose(ts_log, freq=48*7*3)
-#
-# moving_avg = pd.Series.rolling(ts, center=False, window=w).mean()
-# moving_avg = pd.Series.rolling(ts, center=False, window=4).max()
-# plt.plot(moving_avg)
-# plt.plot(ts)
+# Graphique des moyennes et erreurs par jour de la semaine
+# for k in range(7):
+#     plt.subplot(int("1" + str(7) + str(k+1)))
+#     plt.plot(means[k], label=k)
+#     plt.errorbar(range(48), means[k], standard_deviations[k][1])
 # plt.show()
+# print(max_mean / max_mean[0])
+
+# Calcul du coefficient qui minimise le carré de la distance
+# au modèle moyen calculé précédement
+def beta(X, V):
+    if not len(X) == len(V):
+        return None
+    a = sum(list(map(lambda x: x[0] * x[1], zip(V,V))))
+    b = sum(list(map(lambda x: x[0] * x[1], zip(V,X))))
+    return b / a
+
+group = data_ass.groupby([data_ass.index.year, data_ass.index.month, data_ass.index.day])
+
+# Calcul sur l'année du coefficient de dilatation donné par beta()
+# coeff_list_mon = []
+# for i, r in group:
+#     date = pd.to_datetime(reduce(lambda a,b: a + str(b), tuple(map(lambda x: str(x) if not len(str(x)) == 1 else ("0" + str(x)), i)), ""), format='%Y%m%d', errors='ignore')
+#     wd = date.dayofweek
+#     if wd == 0:
+#         nl = list(map(lambda x: x[0], r.values.tolist()))
+#         l = beta(nl, means[wd])
+#         if not l == None:
+#             if not l < 0.5:
+#                 coeff_list_mon.append((date, l))
 #
-# ts_log_moving_avg_diff = ts_log - moving_avg
-# ts_log_moving_avg_diff.dropna(inplace=True)
-# expwighted_avg = pd.ewma(ts_log, halflife=w)
-# ts_log_ewma_diff = ts_log - expwighted_avg
-# ts_log_diff = ts_log - ts_log.shift()
-# ts_log_diff.dropna(inplace=True)
-#
-# for i, r in data_ass.iterrows():
-#     if pd.isnull(r.CSPL_RECEIVED_CALLS):
-#         print(i)
-#
-# ts = data_ass['CSPL_RECEIVED_CALLS']
-# ts_log = moving_avg
-#
-# decomposition = seasonal_decompose(moving_avg, model='additive', freq=48*7*4)
-# trend = decomposition.trend
-# seasonal = decomposition.seasonal
-# residual = decomposition.resid
-# plt.subplot(411)
-# plt.plot(moving_avg, label='Original')
-# plt.legend(loc='best')
-# plt.subplot(412)
-# plt.plot(trend, label='Trend')
-# plt.legend(loc='best')
-# plt.subplot(413)
-# plt.plot(seasonal,label='Seasonality')
-# plt.legend(loc='best')
-# plt.subplot(414)
-# plt.plot(residual, label='Residuals')
-# plt.legend(loc='best')
-# plt.tight_layout()
+# coeff_list_tue = []
+# for i, r in group:
+#     date = pd.to_datetime(reduce(lambda a,b: a + str(b), tuple(map(lambda x: str(x) if not len(str(x)) == 1 else ("0" + str(x)), i)), ""), format='%Y%m%d', errors='ignore')
+#     wd = date.dayofweek
+#     if wd == 1:
+#         nl = list(map(lambda x: x[0], r.values.tolist()))
+#         l = beta(nl, means[wd])
+#         if not l == None:
+#             if not l < 0.5:
+#                 coeff_list_tue.append((date, l))
+
+coeff_list = []
+for i, r in group:
+    date = pd.to_datetime(reduce(lambda a,b: a + str(b), tuple(map(lambda x: str(x) if not len(str(x)) == 1 else ("0" + str(x)), i)), ""), format='%Y%m%d', errors='ignore')
+    wd = date.dayofweek
+    if wd < 5:
+        nl = list(map(lambda x: x[0], r.values.tolist()))
+        l = beta(nl, means[wd])
+        if not l == None:
+            if not l < 0.5:
+                coeff_list.append((date, l))
+
+df_coeff = pd.DataFrame(coeff_list)
+df_coeff.set_index(0, inplace=True)
+# plt.plot(df_coeff)
 # plt.show()
+
+# df_coeff_mon = pd.DataFrame(coeff_list_mon)
+# df_coeff_mon.set_index(0, inplace=True)
+# df_coeff_tue = pd.DataFrame(coeff_list_tue)
+# df_coeff_tue.set_index(0, inplace=True)
+# plt.plot(df_coeff_mon)
+# plt.plot(df_coeff_tue)
+# plt.show()
+
+# df_coeff = pd.DataFrame(coeff_list)
+# df_coeff.set_index(0, inplace=True)
+# df_coeff.dropna(inplace=True)
+# df_log = np.log(df_coeff)
+# df_log_diff = df_log - df_log.shift()
+
+# Calcul de la trend sur les données extraites
+# decomposition = seasonal_decompose(df_coeff, freq=7*10)
+# decomposition.plot()
+# plt.show()
+
+rm = pd.rolling_mean(df_coeff, center=False, window=7*3)
+rm = rm[1]
+rm.dropna(inplace=True)
+
+# from sklearn.linear_model import LinearRegression
 #
-# decomposition2 = seasonal_decompose(residual, freq=48*3)
-# trend2 = decomposition2.trend
-# seasonal2 = decomposition2.seasonal
-# residual2 = decomposition2.resid
-# plt.subplot(411)
-# plt.plot(residual, label='Original')
-# plt.legend(loc='best')
-# plt.subplot(412)
-# plt.plot(trend2, label='Trend')
-# plt.legend(loc='best')
-# plt.subplot(413)
-# plt.plot(seasonal2,label='Seasonality')
-# plt.legend(loc='best')
-# plt.subplot(414)
-# plt.plot(residual2, label='Residuals')
-# plt.legend(loc='best')
-# plt.tight_layout()
+# for deg in range(20, 35):
+#     xc = []
+#     yc = []
+#     begin_date = pd.Timestamp(2011, 1, 1)
+#     for d, c in rm.iteritems():
+#         if not pd.isnull(c):
+#             xc.append((d - begin_date).days)
+#             yc.append(c)
+#     X = []
+#     for i in range(1, deg):
+#         X.append(list(map(lambda a: a**i, xc)))
+#     datalolz = np.vstack(list(zip(*X)))
+#     # yc = np.vstack(yc)
+#     model = LinearRegression()
+#     model.fit(datalolz, yc)
+# #     plt.plot(xc, model.predict(datalolz))
+# # plt.show()
+#
+# xc = np.array(xc)
+# yc = np.array(yc)
+
+# plt.plot(x,y)
+# plt.show()
+
+# popofit = np.polyfit(x, y, 5)
+# plt.plot(popofit)
 # plt.show()
